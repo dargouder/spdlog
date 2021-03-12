@@ -113,3 +113,79 @@ export(PACKAGE ${PROJECT_NAME})
 
 file(GLOB_RECURSE spdlog_include_SRCS "${HEADER_BASE}/*.h")
 add_custom_target(spdlog_headers_for_ide SOURCES ${spdlog_include_SRCS})
+if (SPDLOG_INSTALL)
+    message(STATUS "Generating install")
+    set(project_config_in "${CMAKE_CURRENT_LIST_DIR}/cmake/spdlogConfig.cmake.in")
+    set(project_config_out "${CMAKE_CURRENT_BINARY_DIR}/spdlogConfig.cmake")
+    set(config_targets_file "spdlogConfigTargets.cmake")
+    set(version_config_file "${CMAKE_CURRENT_BINARY_DIR}/spdlogConfigVersion.cmake")
+    set(export_dest_dir "${CMAKE_INSTALL_LIBDIR}/cmake/spdlog")
+    set(pkgconfig_install_dir "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
+    set(pkg_config "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.pc")
+
+    #---------------------------------------------------------------------------------------
+    # Include files
+    #---------------------------------------------------------------------------------------
+    install(DIRECTORY include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" PATTERN "fmt/bundled" EXCLUDE)
+    install(TARGETS spdlog spdlog_header_only EXPORT spdlog DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+
+    if(NOT SPDLOG_FMT_EXTERNAL AND NOT SPDLOG_FMT_EXTERNAL_HO)
+        install(DIRECTORY include/${PROJECT_NAME}/fmt/bundled/
+                DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}/fmt/bundled/")
+    endif()
+
+    #---------------------------------------------------------------------------------------
+    # Install pkg-config file
+    #---------------------------------------------------------------------------------------
+    get_target_property(PKG_CONFIG_DEFINES spdlog INTERFACE_COMPILE_DEFINITIONS)
+    string(REPLACE ";" " -D" PKG_CONFIG_DEFINES "${PKG_CONFIG_DEFINES}")
+    string(CONCAT PKG_CONFIG_DEFINES "-D" "${PKG_CONFIG_DEFINES}")
+    configure_file("cmake/${PROJECT_NAME}.pc.in" "${pkg_config}" @ONLY)
+    install(FILES "${pkg_config}" DESTINATION "${pkgconfig_install_dir}")
+
+    #---------------------------------------------------------------------------------------
+    # Install CMake config files
+    #---------------------------------------------------------------------------------------
+    install(EXPORT spdlog
+            DESTINATION ${export_dest_dir}
+            NAMESPACE spdlog::
+            FILE ${config_targets_file})
+
+    include(CMakePackageConfigHelpers)
+    configure_file("${project_config_in}" "${project_config_out}" @ONLY)
+
+    write_basic_package_version_file("${version_config_file}" COMPATIBILITY SameMajorVersion)
+    install(FILES
+            "${project_config_out}"
+            "${version_config_file}" DESTINATION "${export_dest_dir}")
+
+    #---------------------------------------------------------------------------------------
+    # Support creation of installable packages
+    #---------------------------------------------------------------------------------------
+    include(cmake/spdlogCPack.cmake)
+
+endif ()
+
+if(APPLE)
+		add_custom_command(
+		TARGET spdlog 
+		POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy
+		  $<TARGET_FILE:pbrtParser_static>
+		  ${CMAKE_SOURCE_DIR}/../builtDependencies/apple/$<CONFIGURATION>/libspdlog.a)
+elseif(UNIX)
+		add_custom_command(
+		TARGET spdlog 
+		POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy
+		  $<TARGET_FILE:pbrtParser_static>
+		  ${CMAKE_SOURCE_DIR}/../builtDependencies/unix/$<CONFIGURATION>/libspdlog.a)
+elseif(WIN32)
+		#copying built lib to the output
+		add_custom_command(
+		TARGET spdlog 
+		POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy
+		  $<TARGET_FILE:pbrtParser_static>
+		  ${CMAKE_SOURCE_DIR}/../builtDependencies/windows/$<CONFIGURATION>/spdlog.lib)		
+endif()
